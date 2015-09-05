@@ -39,7 +39,6 @@ using namespace std;
 
 #define PLUGIN_NAME "compare"
 
-extern "C" {
 
 static char cmd_name[] = "compare";
 static char cmd_desc[] = "Compare local and remote package";
@@ -53,28 +52,11 @@ struct pkg_info {
     string version;
     map<string, string> options;
     set<string> shlibs;
+    map<string, string> deps;
 };
 
-int
-pkg_plugin_init(struct pkg_plugin *p)
-{
-	self = p;
-	pkg_plugin_set(p, PKG_PLUGIN_NAME, name);
-	pkg_plugin_set(p, PKG_PLUGIN_DESC, description);
-	pkg_plugin_set(p, PKG_PLUGIN_VERSION, version);
 
-	return (EPKG_OK);
-}
-
-int
-pkg_plugin_shutdown(struct pkg_plugin *p __unused)
-{
-	/* nothing to be done here */
-
-	return (EPKG_OK);
-}
-
-int
+static int
 get_info(const char *name, struct pkg_info *info, bool remote) {
     struct pkgdb *db = NULL;
     if (pkgdb_open_all(&db, PKGDB_REMOTE, NULL) != EPKG_OK) {
@@ -203,6 +185,28 @@ plugin_compare_callback(int argc, char **argv)
     }
     return (EPKG_OK);
 }
+
+extern "C" {
+
+int
+pkg_plugin_init(struct pkg_plugin *p)
+{
+	self = p;
+	pkg_plugin_set(p, PKG_PLUGIN_NAME, name);
+	pkg_plugin_set(p, PKG_PLUGIN_DESC, description);
+	pkg_plugin_set(p, PKG_PLUGIN_VERSION, version);
+
+	return (EPKG_OK);
+}
+
+int
+pkg_plugin_shutdown(struct pkg_plugin *p __unused)
+{
+	/* nothing to be done here */
+
+	return (EPKG_OK);
+}
+
 
 int
 pkg_register_cmd_count() {
