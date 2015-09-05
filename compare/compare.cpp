@@ -48,6 +48,11 @@ static char description[] = "Plugin for comparing local and remote pkgs";
 
 struct pkg_plugin *self;
 
+struct pkg_info {
+    string version;
+    map<string, string> options;
+};
+
 int
 pkg_plugin_init(struct pkg_plugin *p)
 {
@@ -68,8 +73,7 @@ pkg_plugin_shutdown(struct pkg_plugin *p __unused)
 }
 
 int
-get_info(const char *name, string *version, map<string, string>* options,
-        bool remote) {
+get_info(const char *name, struct pkg_info *info, bool remote) {
     struct pkgdb *db = NULL;
     if (pkgdb_open_all(&db, PKGDB_REMOTE, NULL) != EPKG_OK) {
         return (EX_IOERR);
@@ -81,12 +85,16 @@ get_info(const char *name, string *version, map<string, string>* options,
     } else {
         pkg_it = pkgdb_query(db, name, MATCH_EXACT);
     }
+
+    bool found = false;
     struct pkg *pkg = NULL;
     while (pkgdb_it_next(
                 pkg_it, &pkg, PKG_LOAD_BASIC|PKG_LOAD_OPTIONS) == EPKG_OK) {
+        found = true;
+
         char *ver;
         pkg_asprintf(&ver, "%v", pkg);
-        *version = ver;
+        info->version = ver;
         free(ver);
 
         struct pkg_option *option = NULL;
@@ -96,7 +104,7 @@ get_info(const char *name, string *version, map<string, string>* options,
             char *opt_value;
             pkg_asprintf(&opt_value, "%Ov", option);
 
-            options->insert(pair<string, string>(opt_name, opt_value));
+            info->options.insert(pair<string, string>(opt_name, opt_value));
             free(opt_name);
             free(opt_value);
         }
@@ -107,43 +115,58 @@ get_info(const char *name, string *version, map<string, string>* options,
     pkgdb_it_free(pkg_it);
     pkgdb_close(db);
 
+    if (!found)
+        return (EX_DATAERR);
+
     return 0;
 }
 
-static int
-compare_pkg(const char *name) {
-    fprintf(stderr, "Comparing %s:\n", name);
-    map<string, string> local_options, remote_options;
-    string local_version, remote_version;
-
-    get_info(name, &local_version, &local_options, false);
-    get_info(name, &remote_version, &remote_options, true);
-
-    if (local_version != remote_version) {
-        printf("\tVersion difference: local %s remote %s\n",
-                local_version.c_str(), remote_version.c_str());
-    }
-    for (const auto& it : local_options) {
-        if (remote_options.count(it.first) == 0) {
+static void
+compare_options(const struct pkg_info &local, const struct pkg_info &remote) {
+    for (const auto& it : local.options) {
+        if (remote.options.count(it.first) == 0) {
             printf("\tOnly available in local: %s = %s\n",
                     it.first.c_str(), it.second.c_str());
         }
     }
-    for (const auto& it : remote_options) {
-        if (local_options.count(it.first) == 0) {
+    for (const auto& it : remote.options) {
+        if (local.options.count(it.first) == 0) {
             printf("\tOnly available in remote: %s = %s\n",
                     it.first.c_str(), it.second.c_str());
         }
     }
-    for (const auto& it : local_options) {
-        if (remote_options.count(it.first) != 0) {
-            if (remote_options[it.first] != it.second) {
-                printf("\tDifferent value for option %s: local %s remote %s\n",
-                        it.first.c_str(), it.second.c_str(),
-                        remote_options[it.first].c_str());
-            }
+    for (const auto& it : local.options) {
+        const auto &rit = remote.options.find(it.first);
+        if (rit != remote.options.end() && rit->second != it.second) {
+            printf("\tDifferent value for option %s: local %s remote %s\n",
+                    it.first.c_str(), it.second.c_str(),
+                    rit->second.c_str());
         }
     }
+}
+
+static void
+compare_version(const struct pkg_info &local, const struct pkg_info &remote) {
+    if (local.version != remote.version) {
+        printf("\tVersion difference: local %s remote %s\n",
+                local.version.c_str(), remote.version.c_str());
+    }
+}
+
+static int
+compare_pkg(const char *name) {
+    struct pkg_info local, remote;
+    int err;
+
+    if ((err = get_info(name, &local, false)) != 0 ||
+            (err = get_info(name, &remote, true)) != 0) {
+        fprintf(stderr, "Fail to get information for %s\n", name);
+        return err;
+    }
+
+    fprintf(stderr, "Comparing %s:\n", name);
+    compare_version(local, remote);
+    compare_options(local, remote);
 
     return 0;
 }
