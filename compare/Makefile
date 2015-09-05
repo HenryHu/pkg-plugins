@@ -3,13 +3,16 @@
 PREFIX?=	/usr/local
 LIBDIR=		${PREFIX}/lib/pkg/
 SHLIB_DIR?=	${LIBDIR}/
-SHLIB_NAME?=	${PLUGIN_NAME}.so
+#SHLIB_NAME?=	${PLUGIN_NAME}.so
+LIB_CXX=  ${PLUGIN_NAME}
 
 PLUGIN_NAME=	compare
-SRCS=		compare.c
+SRCS=		compare.cpp
 
 PKGFLAGS!=	pkgconf --cflags pkg
 CFLAGS+=	${PKGFLAGS}
+
+CFLAGS+=	-fno-exceptions -lc++
 
 beforeinstall:
 	${INSTALL} -d ${LIBDIR}
