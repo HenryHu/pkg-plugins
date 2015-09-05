@@ -74,6 +74,7 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
     struct pkg *pkg = NULL;
     while (pkgdb_it_next(pkg_it, &pkg,
                 PKG_LOAD_BASIC|
+                PKG_LOAD_DEPS|
                 PKG_LOAD_SHLIBS_REQUIRED|
                 PKG_LOAD_OPTIONS) == EPKG_OK) {
         found = true;
@@ -100,6 +101,12 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
             info->shlibs.insert(shlib);
         }
 
+        struct pkg_dep *dep = NULL;
+        while (pkg_deps(pkg, &dep) == EPKG_OK) {
+            info->deps.insert(pair<string, string>(pkg_dep_name(dep),
+                                                   pkg_dep_version(dep)));
+        }
+
         // TODO: handle multiple matches
         break;
     }
@@ -112,28 +119,40 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
     return 0;
 }
 
+template<class T>
 static void
-compare_options(const struct pkg_info &local, const struct pkg_info &remote) {
-    for (const auto& it : local.options) {
-        if (remote.options.count(it.first) == 0) {
-            printf("\tOnly available in local: %s = %s\n",
-                    it.first.c_str(), it.second.c_str());
+compare_maps(const T& local, const T& remote, const char *appear,
+        const char *val) {
+    for (const auto& it : local) {
+        if (remote.count(it.first) == 0) {
+            printf("\tOnly %s in local: %s = %s\n",
+                    appear, it.first.c_str(), it.second.c_str());
         }
     }
-    for (const auto& it : remote.options) {
-        if (local.options.count(it.first) == 0) {
-            printf("\tOnly available in remote: %s = %s\n",
-                    it.first.c_str(), it.second.c_str());
+    for (const auto& it : remote) {
+        if (local.count(it.first) == 0) {
+            printf("\tOnly %s in remote: %s = %s\n",
+                    appear, it.first.c_str(), it.second.c_str());
         }
     }
-    for (const auto& it : local.options) {
-        const auto &rit = remote.options.find(it.first);
-        if (rit != remote.options.end() && rit->second != it.second) {
-            printf("\tDifferent value for option %s: local %s remote %s\n",
-                    it.first.c_str(), it.second.c_str(),
+    for (const auto& it : local) {
+        const auto &rit = remote.find(it.first);
+        if (rit != remote.end() && rit->second != it.second) {
+            printf("\tDifferent %s for %s: local %s remote %s\n",
+                    val, it.first.c_str(), it.second.c_str(),
                     rit->second.c_str());
         }
     }
+}
+
+static void
+compare_options(const struct pkg_info &local, const struct pkg_info &remote) {
+    compare_maps(local.options, remote.options, "available", "value");
+}
+
+static void
+compare_deps(const struct pkg_info &local, const struct pkg_info &remote) {
+    compare_maps(local.deps, remote.deps, "depend", "version");
 }
 
 static void
@@ -173,6 +192,7 @@ compare_pkg(const char *name) {
     compare_version(local, remote);
     compare_options(local, remote);
     compare_shlibs(local, remote);
+    compare_deps(local, remote);
 
     return 0;
 }
