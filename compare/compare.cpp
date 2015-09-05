@@ -57,12 +57,7 @@ struct pkg_info {
 
 
 static int
-get_info(const char *name, struct pkg_info *info, bool remote) {
-    struct pkgdb *db = NULL;
-    if (pkgdb_open_all(&db, PKGDB_REMOTE, NULL) != EPKG_OK) {
-        return (EX_IOERR);
-    }
-
+get_info(struct pkgdb *db, const char *name, struct pkg_info *info, bool remote) {
     struct pkgdb_it *pkg_it;
     if (remote) {
         pkg_it = pkgdb_repo_query(db, name, MATCH_EXACT, NULL);
@@ -111,7 +106,6 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
         break;
     }
     pkgdb_it_free(pkg_it);
-    pkgdb_close(db);
 
     if (!found)
         return (EX_DATAERR);
@@ -180,12 +174,12 @@ compare_shlibs(const struct pkg_info &local, const struct pkg_info &remote) {
 }
 
 static int
-compare_pkg(const char *name) {
+compare_pkg(struct pkgdb *db, const char *name) {
     struct pkg_info local, remote;
     int err;
 
-    if ((err = get_info(name, &local, false)) != 0 ||
-            (err = get_info(name, &remote, true)) != 0) {
+    if ((err = get_info(db, name, &local, false)) != 0 ||
+            (err = get_info(db, name, &remote, true)) != 0) {
         fprintf(stderr, "Fail to get information for %s\n", name);
         return err;
     }
@@ -202,9 +196,18 @@ compare_pkg(const char *name) {
 static int
 plugin_compare_callback(int argc, char **argv)
 {
-    for (int i=1; i<argc; i++) {
-        compare_pkg(argv[i]);
+    struct pkgdb *db = NULL;
+    if (pkgdb_open_all(&db, PKGDB_REMOTE, NULL) != EPKG_OK) {
+        return (EX_IOERR);
     }
+    pkgdb_obtain_lock(db, PKGDB_LOCK_READONLY);
+
+    for (int i=1; i<argc; i++) {
+        compare_pkg(db, argv[i]);
+    }
+
+    pkgdb_release_lock(db, PKGDB_LOCK_READONLY);
+    pkgdb_close(db);
     return (EPKG_OK);
 }
 
