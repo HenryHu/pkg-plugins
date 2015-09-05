@@ -31,6 +31,7 @@
 #include <libutil.h>
 #include <map>
 #include <string>
+#include <set>
 
 #include <pkg.h>
 
@@ -51,6 +52,7 @@ struct pkg_plugin *self;
 struct pkg_info {
     string version;
     map<string, string> options;
+    set<string> shlibs;
 };
 
 int
@@ -88,8 +90,10 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
 
     bool found = false;
     struct pkg *pkg = NULL;
-    while (pkgdb_it_next(
-                pkg_it, &pkg, PKG_LOAD_BASIC|PKG_LOAD_OPTIONS) == EPKG_OK) {
+    while (pkgdb_it_next(pkg_it, &pkg,
+                PKG_LOAD_BASIC|
+                PKG_LOAD_SHLIBS_REQUIRED|
+                PKG_LOAD_OPTIONS) == EPKG_OK) {
         found = true;
 
         char *ver;
@@ -107,6 +111,11 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
             info->options.insert(pair<string, string>(opt_name, opt_value));
             free(opt_name);
             free(opt_value);
+        }
+
+        char *shlib = NULL;
+        while (pkg_shlibs_required(pkg, &shlib) == EPKG_OK) {
+            info->shlibs.insert(shlib);
         }
 
         // TODO: handle multiple matches
@@ -153,6 +162,20 @@ compare_version(const struct pkg_info &local, const struct pkg_info &remote) {
     }
 }
 
+static void
+compare_shlibs(const struct pkg_info &local, const struct pkg_info &remote) {
+    for (const auto& lib : local.shlibs) {
+        if (remote.shlibs.count(lib) == 0) {
+            printf("\tOnly required by local: %s\n", lib.c_str());
+        }
+    }
+    for (const auto& lib : remote.shlibs) {
+        if (local.shlibs.count(lib) == 0) {
+            printf("\tOnly required by remote: %s\n", lib.c_str());
+        }
+    }
+}
+
 static int
 compare_pkg(const char *name) {
     struct pkg_info local, remote;
@@ -167,6 +190,7 @@ compare_pkg(const char *name) {
     fprintf(stderr, "Comparing %s:\n", name);
     compare_version(local, remote);
     compare_options(local, remote);
+    compare_shlibs(local, remote);
 
     return 0;
 }
