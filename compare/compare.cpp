@@ -122,7 +122,7 @@ get_info(const char *name, struct pkg_info *info, bool remote) {
 template<class T>
 static void
 compare_maps(const T& local, const T& remote, const char *appear,
-        const char *val) {
+        const char *diff_str) {
     for (const auto& it : local) {
         if (remote.count(it.first) == 0) {
             printf("\tOnly %s in local: %s = %s\n",
@@ -135,12 +135,14 @@ compare_maps(const T& local, const T& remote, const char *appear,
                     appear, it.first.c_str(), it.second.c_str());
         }
     }
-    for (const auto& it : local) {
-        const auto &rit = remote.find(it.first);
-        if (rit != remote.end() && rit->second != it.second) {
-            printf("\tDifferent %s for %s: local %s remote %s\n",
-                    val, it.first.c_str(), it.second.c_str(),
-                    rit->second.c_str());
+    if (diff_str) {
+        for (const auto& it : local) {
+            const auto &rit = remote.find(it.first);
+            if (rit != remote.end() && rit->second != it.second) {
+                printf("\tDifferent %s for %s: local %s remote %s\n",
+                        diff_str, it.first.c_str(), it.second.c_str(),
+                        rit->second.c_str());
+            }
         }
     }
 }
@@ -152,7 +154,7 @@ compare_options(const struct pkg_info &local, const struct pkg_info &remote) {
 
 static void
 compare_deps(const struct pkg_info &local, const struct pkg_info &remote) {
-    compare_maps(local.deps, remote.deps, "depend", "version");
+    compare_maps(local.deps, remote.deps, "depend", NULL);
 }
 
 static void
