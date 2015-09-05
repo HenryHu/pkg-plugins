@@ -3,8 +3,10 @@
 PREFIX?=	/usr/local
 LIBDIR=		${PREFIX}/lib/pkg/
 SHLIB_DIR?=	${LIBDIR}/
-#SHLIB_NAME?=	${PLUGIN_NAME}.so
+SHLIB_NAME?=	${PLUGIN_NAME}.so
 LIB_CXX=  ${PLUGIN_NAME}
+MK_PROFILE=	no
+MK_INSTALLLIB=	no
 
 PLUGIN_NAME=	compare
 SRCS=		compare.cpp
