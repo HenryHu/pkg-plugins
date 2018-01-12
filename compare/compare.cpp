@@ -114,19 +114,22 @@ get_info(struct pkgdb *db, const char *name, struct pkg_info *info, bool remote)
 }
 
 template<class T>
-static void
+static bool
 compare_maps(const T& local, const T& remote, const char *appear,
         const char *diff_str) {
+    bool diff = false;
     for (const auto& it : local) {
         if (remote.count(it.first) == 0) {
             printf("\tOnly %s in local: %s = %s\n",
                     appear, it.first.c_str(), it.second.c_str());
+            diff = true;
         }
     }
     for (const auto& it : remote) {
         if (local.count(it.first) == 0) {
             printf("\tOnly %s in remote: %s = %s\n",
                     appear, it.first.c_str(), it.second.c_str());
+            diff = true;
         }
     }
     if (diff_str) {
@@ -136,41 +139,49 @@ compare_maps(const T& local, const T& remote, const char *appear,
                 printf("\tDifferent %s for %s: local %s remote %s\n",
                         diff_str, it.first.c_str(), it.second.c_str(),
                         rit->second.c_str());
+                diff = true;
             }
         }
     }
+    return diff;
 }
 
-static void
+static bool
 compare_options(const struct pkg_info &local, const struct pkg_info &remote) {
-    compare_maps(local.options, remote.options, "available", "value");
+    return compare_maps(local.options, remote.options, "available", "value");
 }
 
-static void
+static bool
 compare_deps(const struct pkg_info &local, const struct pkg_info &remote) {
-    compare_maps(local.deps, remote.deps, "depend", NULL);
+    return compare_maps(local.deps, remote.deps, "depend", NULL);
 }
 
-static void
+static bool
 compare_version(const struct pkg_info &local, const struct pkg_info &remote) {
     if (local.version != remote.version) {
         printf("\tVersion difference: local %s remote %s\n",
                 local.version.c_str(), remote.version.c_str());
+        return true;
     }
+    return false;
 }
 
-static void
+static bool
 compare_shlibs(const struct pkg_info &local, const struct pkg_info &remote) {
+    bool diff = false;
     for (const auto& lib : local.shlibs) {
         if (remote.shlibs.count(lib) == 0) {
             printf("\tOnly required by local: %s\n", lib.c_str());
+            diff = true;
         }
     }
     for (const auto& lib : remote.shlibs) {
         if (local.shlibs.count(lib) == 0) {
             printf("\tOnly required by remote: %s\n", lib.c_str());
+            diff = true;
         }
     }
+    return diff;
 }
 
 static int
@@ -184,11 +195,13 @@ compare_pkg(struct pkgdb *db, const char *name) {
         return err;
     }
 
-    fprintf(stderr, "Comparing %s:\n", name);
-    compare_version(local, remote);
-    compare_options(local, remote);
-    compare_shlibs(local, remote);
-    compare_deps(local, remote);
+    bool diff = compare_version(local, remote);
+    diff |= compare_options(local, remote);
+    diff |= compare_shlibs(local, remote);
+    diff |= compare_deps(local, remote);
+    if (diff) {
+        fprintf(stderr, "%s is different\n", name);
+    }
 
     return 0;
 }
